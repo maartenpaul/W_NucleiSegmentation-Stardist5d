@@ -22,12 +22,14 @@ import os
 from shapely.geometry import shape, box, Polygon,Point
 from shapely import wkt
 from glob import glob
-from tifffile import imread
+import imageio
 from csbdeep.utils import Path, normalize
 from stardist import random_label_cmap
 from stardist.models import StarDist2D
 from cytomine import cytomine, models, CytomineJob
 from cytomine.models import Annotation, AnnotationTerm, AnnotationCollection, ImageInstanceCollection, Job
+from neubiaswg5 import CLASS_OBJSEG
+from neubiaswg5.helpers import NeubiasJob, prepare_data, upload_data, upload_metrics
 from PIL import Image
 import argparse
 import json
@@ -37,10 +39,20 @@ import logging
 __author__ = "Maree Raphael <raphael.maree@uliege.be>"
 
 def main(argv):
-    with CytomineJob.from_cli(argv) as conn:
-        conn.job.update(status=Job.RUNNING, progress=0, statusComment="Initialization...")
-        base_path = "{}".format(os.getenv("HOME")) # Mandatory for Singularity
-        working_path = os.path.join(base_path,str(conn.job.id))
+    base_path = "{}".format(os.getenv("HOME"))
+    problem_cls = CLASS_OBJSEG
+
+    import pdb
+    pdb.set_trace()
+    with NeubiasJob.from_cli(argv) as nj:
+        nj.job.update(status=Job.RUNNING, progress=0, statusComment="Initialization...")
+
+        # 1. Prepare data for workflow
+        in_imgs, gt_imgs, in_path, gt_path, out_path, tmp_path = prepare_data(problem_cls, nj, is_2d=True, **nj.flags)
+        list_imgs = [image.filepath for image in in_imgs]
+        
+        # 2. Run Stardist model on input images
+        nj.job.update(progress=25, statusComment="Launching workflow...")
         
         #Loading pre-trained Stardist model
         np.random.seed(17)
@@ -49,90 +61,31 @@ def main(argv):
         #Stardist H&E model downloaded from https://drive.switch.ch/index.php/s/LTYaIud7w6lCyuI
         model = StarDist2D(None, name='2D_versatile_HE', basedir='/models/')   #use local model file in ~/models/2D_versatile_HE/
 
-        #Select images to process
-        images = ImageInstanceCollection().fetch_with_filter("project", conn.parameters.cytomine_id_project)
-        list_imgs = []
-        if conn.parameters.cytomine_id_images == 'all':
-            for image in images:
-                list_imgs.append(int(image.id))
-        else:
-            list_imgs = [int(id_img) for id_img in conn.parameters.cytomine_id_images.split(',')]
-
         #Go over images
-        for id_image in conn.monitor(list_imgs, prefix="Running detection on image", period=0.1):
-            #Dump ROI annotations in img from Cytomine server to local images
-            #conn.job.update(status=Job.RUNNING, progress=0, statusComment="Fetching ROI annotations...")
-            roi_annotations = AnnotationCollection()
-            roi_annotations.project = conn.parameters.cytomine_id_project
-            roi_annotations.term = conn.parameters.cytomine_id_roi_term
-            roi_annotations.image = id_image #conn.parameters.cytomine_id_image
-            roi_annotations.showWKT = True
-            roi_annotations.fetch()
-            print(roi_annotations)
-            #Go over ROI in this image
-            #for roi in conn.monitor(roi_annotations, prefix="Running detection on ROI", period=0.1):
-            for roi in roi_annotations:
-                #Get Cytomine ROI coordinates for remapping to whole-slide
-                #Cytomine cartesian coordinate system, (0,0) is bottom left corner
-                print("----------------------------ROI------------------------------")
-                roi_geometry = wkt.loads(roi.location)
-                print("ROI Geometry from Shapely: {}".format(roi_geometry))
-                print("ROI Bounds")
-                print(roi_geometry.bounds)
-                minx=roi_geometry.bounds[0]
-                miny=roi_geometry.bounds[3]
-                #Dump ROI image into local PNG file
-                roi_path=os.path.join(working_path,str(roi_annotations.project)+'/'+str(roi_annotations.image)+'/'+str(roi.id))
-                roi_png_filename=os.path.join(roi_path+'/'+str(roi.id)+'.png')
-                print("roi_png_filename: %s" %roi_png_filename)
-                roi.dump(dest_pattern=roi_png_filename,mask=True,alpha=True)
-                #roi.dump(dest_pattern=os.path.join(roi_path,"{id}.png"), mask=True, alpha=True)
-            
-                #Stardist works with TIFF images without alpha channel, flattening PNG alpha mask to TIFF RGB
-                im=Image.open(roi_png_filename)
-                bg = Image.new("RGB", im.size, (255,255,255))
-                bg.paste(im,mask=im.split()[3])
-                roi_tif_filename=os.path.join(roi_path+'/'+str(roi.id)+'.tif')
-                bg.save(roi_tif_filename,quality=100)
-                X_files = sorted(glob(roi_path+'/'+str(roi.id)+'*.tif'))
-                X = list(map(imread,X_files))
-                n_channel = 3 if X[0].ndim == 3 else X[0].shape[-1]
-                axis_norm = (0,1)   # normalize channels independently  (0,1,2) normalize channels jointly
-                if n_channel > 1:
-                    print("Normalizing image channels %s." % ('jointly' if axis_norm is None or 2 in axis_norm else 'independently'))
+        for img_path in list_imgs:
+            img = imageio.imread(img_path)
+            n_channel = 3 if img.ndim == 3 else img.shape[-1]
+            # normalize channels independently (0,1,2) normalize channels jointly
+            axis_norm = (0,1)
+            img = normalize(img, nj.parameters.stardist_norm_perc_low, nj.parameters.stardist_norm_perc_high, axis=axis_norm)
 
-                #Going over ROI images in ROI directory (in our case: one ROI per directory)
-                for x in range(0,len(X)):
-                    print("------------------- Processing ROI file %d: %s" %(x,roi_tif_filename))
-                    img = normalize(X[x], conn.parameters.stardist_norm_perc_low, conn.parameters.stardist_norm_perc_high, axis=axis_norm)
-                    #Stardist model prediction with thresholds
-                    labels, details = model.predict_instances(img,
-                                                              prob_thresh=conn.parameters.stardist_prob_t,
-                                                              nms_thresh=conn.parameters.stardist_nms_t)
-                    print("Number of detected polygons: %d" %len(details['coord']))
-                    cytomine_annotations = AnnotationCollection()
-                    #Go over detections in this ROI, convert and upload to Cytomine
-                    for pos,polygroup in enumerate(details['coord'],start=1):
-                        #Converting to Shapely annotation
-                        points = list()
-                        for i in range(len(polygroup[0])):
-                            #Cytomine cartesian coordinate system, (0,0) is bottom left corner
-                            #Mapping Stardist polygon detection coordinates to Cytomine ROI in whole slide image
-                            p = Point(minx+polygroup[1][i],miny-polygroup[0][i])
-                            points.append(p)
+            #Stardist model prediction with thresholds
+            labels, details = model.predict_instances(img,
+                                                      prob_thresh=nj.parameters.stardist_prob_t,
+                                                      nms_thresh=nj.parameters.stardist_nms_t)
+            imageio.imwrite(os.path.join(out_path,os.path.basename(img_path)), labels)
 
-                        annotation = Polygon(points)
-                        #Append to Annotation collection 
-                        cytomine_annotations.append(Annotation(location=annotation.wkt,
-                                                               id_image=id_image,#conn.parameters.cytomine_id_image,
-                                                               id_project=conn.parameters.cytomine_id_project,
-                                                               id_terms=[conn.parameters.cytomine_id_cell_term]))
-                        print(".",end = '',flush=True)
+        # 3. Upload data to BIAFLOWS
+        upload_data(problem_cls, nj, in_imgs, out_path, **nj.flags, monitor_params={
+            "start": 60, "end": 90, "period": 0.1,
+            "prefix": "Extracting and uploading polygons from masks"})
+        
+        # 4. Compute and upload metrics
+        nj.job.update(progress=90, statusComment="Computing and uploading metrics...")
+        upload_metrics(problem_cls, nj, in_imgs, gt_path, out_path, tmp_path, **nj.flags)
 
-                    #Send Annotation Collection (for this ROI) to Cytomine server in one http request
-                    ca = cytomine_annotations.save()
+        # 5. Pipeline finished
+        nj.job.update(progress=100, status=Job.TERMINATED, status_comment="Finished.")
 
-        conn.job.update(status=Job.TERMINATED, progress=100, statusComment="Finished.")
-                
 if __name__ == "__main__":
     main(sys.argv[1:])

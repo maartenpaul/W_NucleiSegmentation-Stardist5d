@@ -1,98 +1,57 @@
 {
-    "name": "CellDetect_Stardist_HE_ROI",
+    "name": "CellDetect_Stardist_HE",
+    "description": "Cell (nuclei) detection using StarDist with versatile H&E pre-trained model",
     "container-image": {
-        "image": "cytomineuliege/s_celldetect_stardist_he_roi",
+        "image": "neubiaswg5/w_celldetect_stardist_he",
         "type": "singularity"
     },
     "schema-version": "cytomine-0.1",
-    "description": "Cell (nuclei) detection using StarDist with versatile H&E pre-trained model",
-    "command-line": "python run.py CYTOMINE_HOST CYTOMINE_PUBLIC_KEY CYTOMINE_PRIVATE_KEY CYTOMINE_ID_PROJECT CYTOMINE_ID_SOFTWARE CYTOMINE_ID_IMAGES CYTOMINE_ID_ROI_TERM CYTOMINE_ID_CELL_TERM STARDIST_PROB_T STARDIST_NMS_T STARDIST_NORM_PERC_LOW STARDIST_NORM_PERC_HIGH",
+    "command-line": "python run.py CYTOMINE_HOST CYTOMINE_PUBLIC_KEY CYTOMINE_PRIVATE_KEY CYTOMINE_ID_PROJECT CYTOMINE_ID_SOFTWARE STARDIST_PROB_T STARDIST_NMS_T STARDIST_NORM_PERC_LOW STARDIST_NORM_PERC_HIGH",
     "inputs": [
         {
-        	"id": "cytomine_host",
-      		"value-key": "@ID",
-      		"command-line-flag": "--@id",
-      		"name": "Cytomine host",
-      		"set-by-server": true,
-      		"optional": false,
-      		"type": "String"
+            "id": "cytomine_host",
+      	    "value-key": "@ID",
+      	    "command-line-flag": "--@id",
+      	    "name": "BIAFLOWS host",
+      	    "set-by-server": true,
+      	    "optional": false,
+      	    "type": "String"
     	},
         {
-			"id": "cytomine_public_key",
-			"value-key": "@ID",
-			"command-line-flag": "--@id",
-			"name": "Cytomine public key",
-			"set-by-server": true,
-			"optional": false,
-			"type": "String"
+	    "id": "cytomine_public_key",
+	    "value-key": "@ID",
+	    "command-line-flag": "--@id",
+	    "name": "BIAFLOWS public key",
+	    "set-by-server": true,
+	    "optional": false,
+	    "type": "String"
     	},
     	{
-    		"id": "cytomine_private_key",
-			"value-key": "@ID",
-			"command-line-flag": "--@id",
-			"name": "Cytomine private key",
-			"set-by-server": true,
-			"optional": false,
-			"type": "String"
+    	    "id": "cytomine_private_key",
+	    "value-key": "@ID",
+	    "command-line-flag": "--@id",
+	    "name": "BIAFLOWS private key",
+	    "set-by-server": true,
+	    "optional": false,
+	    "type": "String"
     	},
-		{
-			"id": "cytomine_id_project",
-			"value-key": "@ID",
-			"command-line-flag": "--@id",
-			"name": "Cytomine project ID",
-			"set-by-server": true,
-			"optional": false,
-			"type": "Number"
+	{
+	    "id": "cytomine_id_project",
+	    "value-key": "@ID",
+	    "command-line-flag": "--@id",
+	    "name": "BIAFLOWS project ID",
+	    "set-by-server": true,
+	    "optional": false,
+	    "type": "Number"
     	},
-		{
-			"id": "cytomine_id_software",
-			"value-key": "@ID",
-			"command-line-flag": "--@id",
-			"name": "Cytomine software ID",
-			"set-by-server": true,
-			"optional": false,
-			"type": "Number"
-		},
 	{
-	    "id": "cytomine_id_images",
+	    "id": "cytomine_id_software",
 	    "value-key": "@ID",
 	    "command-line-flag": "--@id",
-	    "name": "Cytomine Image IDs",
-	    "description": "Images on which to detect objects",
-	    "set-by-server": false,
+	    "name": "BIAFLOWS software ID",
+	    "set-by-server": true,
 	    "optional": false,
-	    "type": "ListDomain",
-	        "uri": "/api/project/$currentProject$/imageinstance.json",
-	        "uri-print-attribute": "instanceFilename",
-	        "uri-sort-attribute": "instanceFilename"
-	},
-
-	{
-	    "id": "cytomine_id_roi_term",
-	    "value-key": "@ID",
-	    "command-line-flag": "--@id",
-	    "name": "Cytomine ROI term ID",
-	    "description": "Ontology term ID for ROI(s) where to detect cells",
-	    "set-by-server": false,
-	    "optional": false,
-	    "type": "Domain",
-	    "uri": "/api/ontology/$currentOntology$/term.json",
-	    "uri-print-attribute": "name",
-	    "uri-sort-attribute": "name"
-	},
-
-	{
-	    "id": "cytomine_id_cell_term",
-	    "value-key": "@ID",
-	    "command-line-flag": "--@id",
-	    "name": "Cytomine Cell term ID",
-	    "description": "Ontology term ID for Cell to be detected",
-	    "set-by-server": false,
-	    "optional": false,
-	    "type": "Domain",
-	    "uri": "/api/ontology/$currentOntology$/term.json",
-	    "uri-print-attribute": "name",
-	    "uri-sort-attribute": "name"
+	    "type": "Number"
 	},
 	{
 	    "id": "stardist_prob_t",
