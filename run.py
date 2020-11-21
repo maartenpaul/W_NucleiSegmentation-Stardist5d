@@ -15,28 +15,19 @@
 # * limitations under the License.
 
 
-from __future__ import print_function, unicode_literals, absolute_import, division
 import sys
 import numpy as np
 import os
-from shapely.geometry import shape, box, Polygon,Point
-from shapely import wkt
-from glob import glob
 import imageio
-from csbdeep.utils import Path, normalize
+import skimage
+import skimage.color
+from csbdeep.utils import normalize
 from stardist import random_label_cmap
 from stardist.models import StarDist2D
-from cytomine import cytomine, models, CytomineJob
-from cytomine.models import Annotation, AnnotationTerm, AnnotationCollection, ImageInstanceCollection, Job
+from cytomine.models import Job
 from neubiaswg5 import CLASS_OBJSEG
 from neubiaswg5.helpers import NeubiasJob, prepare_data, upload_data, upload_metrics
-from PIL import Image
-import argparse
-import json
-import logging
 
-
-__author__ = "Maree Raphael <raphael.maree@uliege.be>"
 
 def main(argv):
     base_path = "{}".format(os.getenv("HOME"))
@@ -63,6 +54,8 @@ def main(argv):
         for img_path in list_imgs:
             img = imageio.imread(img_path)
             n_channel = 3 if img.ndim == 3 else img.shape[-1]
+            if n_channel == 2:
+                img = skimage.color.gray2rgb(img)
             # normalize channels independently (0,1,2) normalize channels jointly
             axis_norm = (0,1)
             img = normalize(img, nj.parameters.stardist_norm_perc_low, nj.parameters.stardist_norm_perc_high, axis=axis_norm)
