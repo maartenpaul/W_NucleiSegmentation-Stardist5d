@@ -53,8 +53,8 @@ def main(argv):
         #Go over images
         for img_path in list_imgs:
             img = imageio.imread(img_path)
-            n_channel = 3 if img.ndim == 3 else img.shape[-1]
-            if n_channel == 2:
+            n_channel = 3 if img.ndim == 3 else 1
+            if n_channel == 1:
                 img = skimage.color.gray2rgb(img)
             # normalize channels independently (0,1,2) normalize channels jointly
             axis_norm = (0,1)
