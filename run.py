@@ -33,6 +33,8 @@ def main(argv):
     base_path = "{}".format(os.getenv("HOME"))
     problem_cls = CLASS_OBJSEG
 
+    import pdb
+    pdb.set_trace()
     with NeubiasJob.from_cli(argv) as nj:
         nj.job.update(status=Job.RUNNING, progress=0, statusComment="Initialization...")
 
@@ -64,6 +66,8 @@ def main(argv):
             labels, details = model.predict_instances(img,
                                                       prob_thresh=nj.parameters.stardist_prob_t,
                                                       nms_thresh=nj.parameters.stardist_nms_t)
+            # Convert labels to uint16 for BIAFLOWS
+            labels = labels.astype(np.uint16)
             imageio.imwrite(os.path.join(out_path,os.path.basename(img_path)), labels)
 
         # 3. Upload data to BIAFLOWS
