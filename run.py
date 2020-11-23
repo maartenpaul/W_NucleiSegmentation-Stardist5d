@@ -33,8 +33,6 @@ def main(argv):
     base_path = "{}".format(os.getenv("HOME"))
     problem_cls = CLASS_OBJSEG
 
-    import pdb
-    pdb.set_trace()
     with NeubiasJob.from_cli(argv) as nj:
         nj.job.update(status=Job.RUNNING, progress=0, statusComment="Initialization...")
 
