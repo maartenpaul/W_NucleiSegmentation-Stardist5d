@@ -45,17 +45,16 @@ def main(argv):
         
         #Loading pre-trained Stardist model
         np.random.seed(17)
+
         lbl_cmap = random_label_cmap()
-        #Stardist H&E model downloaded from https://github.com/mpicbg-csbd/stardist/issues/46
-        #Stardist H&E model downloaded from https://drive.switch.ch/index.php/s/LTYaIud7w6lCyuI
-        model = StarDist2D(None, name='2D_versatile_HE', basedir='/models/')   #use local model file in ~/models/2D_versatile_HE/
+        model = StarDist2D(None, name='2D_versatile_fluo', basedir='/models/')   #use local model file in ~/models/2D_versatile_fluo/
 
         #Go over images
         for img_path in list_imgs:
             img = imageio.imread(img_path)
             n_channel = 3 if img.ndim == 3 else 1
-            if n_channel == 1:
-                img = skimage.color.gray2rgb(img)
+            #if n_channel == 1:
+            #    img = skimage.color.gray2rgb(img)
             # normalize channels independently (0,1,2) normalize channels jointly
             axis_norm = (0,1)
             img = normalize(img, nj.parameters.stardist_norm_perc_low, nj.parameters.stardist_norm_perc_high, axis=axis_norm)
