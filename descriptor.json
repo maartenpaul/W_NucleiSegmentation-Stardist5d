@@ -1,8 +1,8 @@
 {
-    "name": "CellDetect_Stardist_HE",
-    "description": "Cell (nuclei) detection using StarDist with versatile H&E pre-trained model",
+    "name": "NucleiSegmentation-Stardist",
+    "description": "Nuclei segmentation using StarDist with versatile nuclei pre-trained model",
     "container-image": {
-        "image": "neubiaswg5/w_celldetect_stardist_he",
+        "image": "neubiaswg5/w_nucleisegmentation-stardist",
         "type": "singularity"
     },
     "schema-version": "cytomine-0.1",
