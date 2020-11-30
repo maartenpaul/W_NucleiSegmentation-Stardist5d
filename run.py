@@ -56,6 +56,9 @@ def main(argv):
             #if n_channel == 1:
             #    img = skimage.color.gray2rgb(img)
             # normalize channels independently (0,1,2) normalize channels jointly
+            if n_channel == 3:
+                img = skimage.color.rgb2gray(img)
+
             axis_norm = (0,1)
             img = normalize(img, bj.parameters.stardist_norm_perc_low, bj.parameters.stardist_norm_perc_high, axis=axis_norm)
 
