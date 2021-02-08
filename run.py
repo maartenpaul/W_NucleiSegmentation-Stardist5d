@@ -47,25 +47,36 @@ def main(argv):
         np.random.seed(17)
 
         lbl_cmap = random_label_cmap()
-        model = StarDist2D(None, name='2D_versatile_fluo', basedir='/models/')   #use local model file in ~/models/2D_versatile_fluo/
+        model_fluo = StarDist2D(None, name='2D_versatile_fluo', basedir='/models/')
+        model_he = StarDist2D(None, name='2D_versatile_he', basedir='/models/')
 
         #Go over images
         for img_path in list_imgs:
+            fluo = True
             img = imageio.imread(img_path)
             n_channel = 3 if img.ndim == 3 else 1
-            #if n_channel == 1:
-            #    img = skimage.color.gray2rgb(img)
-            # normalize channels independently (0,1,2) normalize channels jointly
-            if n_channel == 3:
-                img = skimage.color.rgb2gray(img)
 
+            if n_channel == 3:
+                # Check if 3-channel grayscale image or actually an RGB image
+                if np.array_equal(img[:,:,0],img[:,:,1]) and np.array_equal(img[:,:,0],img[:,:,2]):
+                    img = skimage.color.rgb2gray(img)
+                else:
+                    fluo = False
+
+            # normalize channels independently (0,1,2) normalize channels jointly (0,1)
             axis_norm = (0,1)
             img = normalize(img, bj.parameters.stardist_norm_perc_low, bj.parameters.stardist_norm_perc_high, axis=axis_norm)
 
             #Stardist model prediction with thresholds
-            labels, details = model.predict_instances(img,
-                                                      prob_thresh=bj.parameters.stardist_prob_t,
-                                                      nms_thresh=bj.parameters.stardist_nms_t)
+            if fluo:
+                labels, details = model_fluo.predict_instances(img,
+                                                               prob_thresh=bj.parameters.stardist_prob_t,
+                                                               nms_thresh=bj.parameters.stardist_nms_t) 
+            else:
+                labels, details = model_he.predict_instances(img,
+                                                             prob_thresh=bj.parameters.stardist_prob_t,
+                                                             nms_thresh=bj.parameters.stardist_nms_t)
+            
             # Convert labels to uint16 for BIAFLOWS
             labels = labels.astype(np.uint16)
             imageio.imwrite(os.path.join(out_path,os.path.basename(img_path)), labels)

@@ -24,13 +24,23 @@ RUN pip install tensorflow==1.15
 RUN pip install stardist==0.5.0
 RUN mkdir -p /models && \
     cd /models && \
-    mkdir -p 2D_versatile_fluo
-ADD config.json /models/2D_versatile_fluo/config.json
-ADD thresholds.json /models/2D_versatile_fluo/thresholds.json
-ADD weights_last.h5 /models/2D_versatile_fluo/weights_best.h5
+    mkdir -p 2D_versatile_fluo && \
+    mkdir -p 2D_versatile_he
+
+# Add fluo model
+ADD fluo_config.json /models/2D_versatile_fluo/config.json
+ADD fluo_thresholds.json /models/2D_versatile_fluo/thresholds.json
+ADD fluo_weights.h5 /models/2D_versatile_fluo/weights_best.h5
 RUN chmod 444 /models/2D_versatile_fluo/config.json
 RUN chmod 444 /models/2D_versatile_fluo/thresholds.json
 RUN chmod 444 /models/2D_versatile_fluo/weights_best.h5
+# Add HE model
+ADD he_config.json /models/2D_versatile_he/config.json
+ADD he_thresholds.json /models/2D_versatile_he/thresholds.json
+ADD he_weights.h5 /models/2D_versatile_he/weights_best.h5
+RUN chmod 444 /models/2D_versatile_he/config.json
+RUN chmod 444 /models/2D_versatile_he/thresholds.json
+RUN chmod 444 /models/2D_versatile_he/weights_best.h5
 
 # -----------------------------------------------------------------------------
 # Install scripts
