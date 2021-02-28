@@ -1,5 +1,5 @@
 # W_NucleiSegmentation-Stardist
-BIAFLOWS workflow for Cell/Nuclei detection, encapsulating Stardist Python code (https://github.com/mpicbg-csbd/stardist/) originally developed by Uwe Schmidt, Martin Weigert, Coleman Broaddus, and Gene Myers as published in Cell Detection with Star-convex Polygons. International Conference on Medical Image Computing and Computer-Assisted Intervention (MICCAI), Granada, Spain, September 2018.
+BIAFLOWS workflow for nuclei segmentation, encapsulating Stardist Python code (https://github.com/mpicbg-csbd/stardist/) originally developed by Uwe Schmidt, Martin Weigert, Coleman Broaddus, and Gene Myers as published in Cell Detection with Star-convex Polygons. International Conference on Medical Image Computing and Computer-Assisted Intervention (MICCAI), Granada, Spain, September 2018.
 
 Applies a Stardist pre-trained model (versatile_fluo or versatile_HE) depending on the input images ie. uses both models for a dataset including both fluorescence (grayscale or RGB where all channels are equal) and H&E stained (RGB where channels are not equal) images.
 
