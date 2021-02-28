@@ -11,7 +11,7 @@ RUN git clone https://github.com/cytomine-uliege/Cytomine-python-client.git && \
 # Install BIAFLOWS-Utilities (annotation exporter, compute metrics, helpers,...)
 RUN apt-get update && apt-get install libgeos-dev -y && apt-get clean
 RUN git clone https://github.com/Neubias-WG5/biaflows-utilities.git && \
-    cd /biaflows-utilities/ && git checkout tags/v0.9.1 && pip install .
+    cd /biaflows-utilities/ && git checkout tags/v0.9.2 && pip install .
 
 # install utilities binaries
 RUN chmod +x /biaflows-utilities/bin/*
