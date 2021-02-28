@@ -19,6 +19,8 @@ RUN cp /biaflows-utilities/bin/* /usr/bin/ && \
     rm -r /biaflows-utilities
 
 # -----------------------------------------------------------------------------
+RUN pip install imageio
+
 # Install Stardist and tensorflow
 RUN pip install tensorflow==1.15
 RUN pip install stardist==0.5.0
