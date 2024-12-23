@@ -1,12 +1,12 @@
 {
-    "name": "NucleiSegmentation-Stardist",
-    "description": "Nuclei segmentation using StarDist with versatile nuclei pre-trained model",
+    "name": "NucleiSegmentation-Stardist5D",
+    "description": "Nuclei segmentation using StarDist with versatile nuclei pre-trained model for 5D images",
     "container-image": {
         "image": "neubiaswg5/w_nucleisegmentation-stardist",
         "type": "singularity"
     },
     "schema-version": "cytomine-0.1",
-    "command-line": "python run.py CYTOMINE_HOST CYTOMINE_PUBLIC_KEY CYTOMINE_PRIVATE_KEY CYTOMINE_ID_PROJECT CYTOMINE_ID_SOFTWARE STARDIST_PROB_T STARDIST_NMS_T STARDIST_NORM_PERC_LOW STARDIST_NORM_PERC_HIGH",
+    "command-line": "python run.py CYTOMINE_HOST CYTOMINE_PUBLIC_KEY CYTOMINE_PRIVATE_KEY CYTOMINE_ID_PROJECT CYTOMINE_ID_SOFTWARE STARDIST_PROB_T STARDIST_NMS_T STARDIST_NORM_PERC_LOW STARDIST_NORM_PERC_HIGH NUC_CHANNEL",
     "inputs": [
         {
             "id": "cytomine_host",
@@ -96,6 +96,17 @@
 	    "set-by-server": false,
 	    "optional": true,
 	    "type": "Number"
+	},
+	{
+		"id": "nuc_channel",
+		"value-key": "@ID",
+		"command-line-flag": "--@id",
+		"name": "Nuclei channel",
+		"description": "Use default 0 for grayscale and RGB that should be converted to grayscale based on luminance. Use 1, 2 or 3 to select a specific RGB channel",
+		"default-value": 0,
+		"set-by-server": false,
+		"optional": true,
+		"type": "Number"
 	}
     ]
 }

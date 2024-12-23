@@ -28,6 +28,34 @@ from cytomine.models import Job
 from biaflows import CLASS_OBJSEG
 from biaflows.helpers import BiaflowsJob, prepare_data, upload_data, upload_metrics
 
+def run_startdist(img):
+    fluo = True
+    n_channel = 3 if img.ndim == 3 else 1
+
+    if n_channel == 3:
+        # Check if 3-channel grayscale image or actually an RGB image
+        if np.array_equal(img[:,:,0],img[:,:,1]) and np.array_equal(img[:,:,0],img[:,:,2]):
+            img = skimage.color.rgb2gray(img)
+        else:
+            fluo = False
+
+    # normalize channels independently (0,1,2) normalize channels jointly (0,1)
+    axis_norm = (0,1)
+    img = normalize(img, bj.parameters.stardist_norm_perc_low, bj.parameters.stardist_norm_perc_high, axis=axis_norm)
+
+    #Stardist model prediction with thresholds
+    if fluo:
+        labels, details = model_fluo.predict_instances(img,
+                                                        prob_thresh=bj.parameters.stardist_prob_t,
+                                                        nms_thresh=bj.parameters.stardist_nms_t) 
+    else:
+        labels, details = model_he.predict_instances(img,
+                                                        prob_thresh=bj.parameters.stardist_prob_t,
+                                                        nms_thresh=bj.parameters.stardist_nms_t)
+    
+    # Convert labels to uint16 for BIAFLOWS
+    labels = labels.astype(np.uint16)
+    return labels
 
 def main(argv):
     base_path = "{}".format(os.getenv("HOME"))
@@ -39,7 +67,8 @@ def main(argv):
         # 1. Prepare data for workflow
         in_imgs, gt_imgs, in_path, gt_path, out_path, tmp_path = prepare_data(problem_cls, bj, is_2d=True, **bj.flags)
         list_imgs = [image.filepath for image in in_imgs]
-        
+        nuc_channel = bj.parameters.nuc_channel
+
         # 2. Run Stardist model on input images
         bj.job.update(progress=25, statusComment="Launching workflow...")
         
@@ -52,33 +81,19 @@ def main(argv):
 
         #Go over images
         for img_path in list_imgs:
-            fluo = True
+            #check if image is 2D or 3D
             img = imageio.imread(img_path)
-            n_channel = 3 if img.ndim == 3 else 1
-
-            if n_channel == 3:
-                # Check if 3-channel grayscale image or actually an RGB image
-                if np.array_equal(img[:,:,0],img[:,:,1]) and np.array_equal(img[:,:,0],img[:,:,2]):
-                    img = skimage.color.rgb2gray(img)
-                else:
-                    fluo = False
-
-            # normalize channels independently (0,1,2) normalize channels jointly (0,1)
-            axis_norm = (0,1)
-            img = normalize(img, bj.parameters.stardist_norm_perc_low, bj.parameters.stardist_norm_perc_high, axis=axis_norm)
-
-            #Stardist model prediction with thresholds
-            if fluo:
-                labels, details = model_fluo.predict_instances(img,
-                                                               prob_thresh=bj.parameters.stardist_prob_t,
-                                                               nms_thresh=bj.parameters.stardist_nms_t) 
+            nz, _, nt = img.shape[:3]
+            if img.ndim == 5:
+                processed_img = np.zeros_like(img)
+                for z, t in np.ndindex(nz, nt):
+                    # Process single xy slice
+                    processed_slice = run_startdist(img[z,nuc_channel,t])
+                    # Store processed slice
+                    processed_img[z,nuc_channel,t] = processed_slice
             else:
-                labels, details = model_he.predict_instances(img,
-                                                             prob_thresh=bj.parameters.stardist_prob_t,
-                                                             nms_thresh=bj.parameters.stardist_nms_t)
-            
-            # Convert labels to uint16 for BIAFLOWS
-            labels = labels.astype(np.uint16)
+                labels = run_startdist(img)
+
             imageio.imwrite(os.path.join(out_path,os.path.basename(img_path)), labels)
 
         # 3. Upload data to BIAFLOWS
