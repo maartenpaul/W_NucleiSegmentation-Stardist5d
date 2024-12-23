@@ -1,4 +1,4 @@
-FROM python:3.7-stretch
+FROM python:3.7-bullseye
 
 # -----------------------------------------------------------------------------
 # Install Cytomine python client
@@ -23,7 +23,12 @@ RUN pip install imageio
 
 # Install Stardist and tensorflow
 RUN pip install tensorflow==1.15
-RUN pip install stardist==0.5.0
+RUN pip install keras==2.1.6
+RUN pip3 install h5py==2.10.0
+RUN pip install protobuf==3.20.*
+RUN pip install stardist[tf1]==0.5.0
+RUN pip install -U tifffile[all]
+
 RUN mkdir -p /models && \
     cd /models && \
     mkdir -p 2D_versatile_fluo && \
