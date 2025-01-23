@@ -130,7 +130,7 @@ def main(argv):
                 elif channels:
                     labels[nuc_channel] = run_startdist(bj,models,img[nuc_channel])
             elif len(dims) == 2:
-                labels = run_startdist(img)
+                labels = run_startdist(bj,models,img)
 
             imwrite(os.path.join(out_path,os.path.basename(img_path)), labels)
 
