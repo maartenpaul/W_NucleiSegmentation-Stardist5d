@@ -86,7 +86,8 @@ def main(argv):
             dims = img.shape
             labels = np.zeros_like(img)
             bj.job.update(progress=30, statusComment="Number of dimensions in image: {}".format(len(dims)))
-            
+            bj.job.update(progress=30, statusComment="shape of full image "+ str(img.shape))
+
             if len(dims) == 5:
                 _, nz, nt = img.shape[:3]
                 for z, t in np.ndindex(nz, nt):
@@ -94,19 +95,23 @@ def main(argv):
                     processed_slice = run_startdist(bj,models,img[nuc_channel,z,t])
                     # Store processed slice
                     labels[nuc_channel,z,t] = processed_slice
+                    metadata = {'axes': 'CZTYX'}
             elif len(dims) == 4:
                 if channels and z_slices:
                     _, nz = img.shape[:2]
-                    for z in np.ndindex(nz):
+                    bj.job.update(progress=30, statusComment="nz is "+ str(nz))
+                    for z in range(nz):
                         processed_slice = run_startdist(bj,models,img[nuc_channel,z])
                         # Store processed slice
-                        labels[nuc_channel,z] = processed_slice                    
+                        labels[nuc_channel,z] = processed_slice
+                    metadata = {'axes': 'CZYX'}                    
                 elif channels and time_series:
                     _, nt = img.shape[:2]
-                    for t in np.ndindex(nt):
+                    for t in range(nt):
                         processed_slice = run_startdist(bj,models,img[nuc_channel,t])
                         # Store processed slice
                         labels[nuc_channel,t] = processed_slice
+                    metadata = {'axes': 'CTYX'}                    
                 elif z_slices and time_series:
                     nz , nt = img.shape[:2]
                     for z, t in np.ndindex(nz, nt):
@@ -114,25 +119,29 @@ def main(argv):
                         processed_slice = run_startdist(bj,models,img[z,t])
                         # Store processed slice
                         labels[z,t] = processed_slice
+                    metadata = {'axes': 'ZTYX'}                    
             elif len(dims) == 3:
                 if z_slices:
                     nz = img.shape[0]
-                    for z in np.ndindex(nz):
+                    for z in range(nz):
                         processed_slice = run_startdist(bj,models,img[z])
                         # Store processed slice
-                        labels[z] = processed_slice                     
+                        labels[z] = processed_slice
+                    metadata = {'axes': 'ZYX'}                      
                 elif time_series:
                     nt = img.shape[0]
                     for t in np.ndindex(nt):
                         processed_slice = run_startdist(bj,models,img[t])
                         # Store processed slice
-                        labels[t] = processed_slice                    
+                        labels[t] = processed_slice
+                    metadata = {'axes': 'TYX'}                      
                 elif channels:
                     labels[nuc_channel] = run_startdist(bj,models,img[nuc_channel])
             elif len(dims) == 2:
                 labels = run_startdist(bj,models,img)
-
-            imwrite(os.path.join(out_path,os.path.basename(img_path)), labels)
+                metadata = {'axes': 'YX'}
+            bj.job.update(progress=90, statusComment="shape of labels: "+ str(labels.shape))
+            imwrite(os.path.join(out_path,os.path.basename(img_path)), labels,ome=True,metadata=metadata,photometric='minisblack')
 
         # 3. Upload data to BIAFLOWS
         upload_data(problem_cls, bj, in_imgs, out_path, **bj.flags, monitor_params={
