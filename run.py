@@ -67,92 +67,75 @@ def main(argv):
         time_series = bj.parameters.time_series
         z_slices = bj.parameters.z_slices
 
-        # 2. Run Stardist model on input images
+        # 2. Run Stardist model
         bj.job.update(progress=25, statusComment="Launching workflow...")
-        bj.job.update(progress=26, statusComment="Processing images with channels is {}, time_series is {}, z_slices is {}".format(channels, time_series, z_slices))
-
-        #Loading pre-trained Stardist model
+        bj.job.update(progress=30, statusComment="Processing images with channels is {}, time_series is {}, z_slices is {}".format(channels, time_series, z_slices))
         np.random.seed(17)
-
-        lbl_cmap = random_label_cmap()
         model_fluo = StarDist2D(None, name='2D_versatile_fluo', basedir='/models/')
         model_he = StarDist2D(None, name='2D_versatile_he', basedir='/models/')
         models = [model_fluo, model_he]
-        # handle all possible input cases (x,y), (c,z,x,y), (c,t,x,y), (z,t,x,y), (z,x,y),(c,x,y),(t,x,y),(c,z,t,x,y)
-        bj.job.update(progress=30, statusComment="length of list_imgs: {}".format(len(list_imgs)))
+
         for img_path in list_imgs:
-            #check if image is 2D or 3D
             img = imread(img_path)
             dims = img.shape
-            labels = np.zeros_like(img)
-            bj.job.update(progress=30, statusComment="Number of dimensions in image: {}".format(len(dims)))
-            bj.job.update(progress=30, statusComment="shape of full image "+ str(img.shape))
-
+            
             if len(dims) == 5:
-                _, nz, nt = img.shape[:3]
+                _, nz, nt, nx, ny = img.shape
+                labels = np.zeros((1,nz,nt,nx,ny), dtype=np.uint16)
                 for z, t in np.ndindex(nz, nt):
-                    # Process single xy slice
-                    processed_slice = run_startdist(bj,models,img[nuc_channel,z,t])
-                    # Store processed slice
-                    labels[nuc_channel,z,t] = processed_slice
-                    metadata = {'axes': 'CZTYX'}
+                    labels[nuc_channel,z,t] = run_startdist(bj,models,img[nuc_channel,z,t])
+
             elif len(dims) == 4:
                 if channels and z_slices:
-                    _, nz = img.shape[:2]
-                    bj.job.update(progress=30, statusComment="nz is "+ str(nz))
+                    _, nz, nx, ny = img.shape
+                    labels = np.zeros((1,nz,nx,ny), dtype=np.uint16)
                     for z in range(nz):
-                        processed_slice = run_startdist(bj,models,img[nuc_channel,z])
-                        # Store processed slice
-                        labels[nuc_channel,z] = processed_slice
-                    metadata = {'axes': 'CZYX'}                    
+                        labels[0,z] = run_startdist(bj,models,img[nuc_channel,z])
+                        
                 elif channels and time_series:
-                    _, nt = img.shape[:2]
+                    _, nt, nx, ny = img.shape
+                    labels = np.zeros((1,nt,nx,ny), dtype=np.uint16)
                     for t in range(nt):
-                        processed_slice = run_startdist(bj,models,img[nuc_channel,t])
-                        # Store processed slice
-                        labels[nuc_channel,t] = processed_slice
-                    metadata = {'axes': 'CTYX'}                    
+                        labels[0,t] = run_startdist(bj,models,img[nuc_channel,t])
+                        
                 elif z_slices and time_series:
-                    nz , nt = img.shape[:2]
+                    nz, nt, nx, ny = img.shape
+                    labels = np.zeros((nz,nt,nx,ny), dtype=np.uint16)
                     for z, t in np.ndindex(nz, nt):
-                        # Process single xy slice
-                        processed_slice = run_startdist(bj,models,img[z,t])
-                        # Store processed slice
-                        labels[z,t] = processed_slice
-                    metadata = {'axes': 'ZTYX'}                    
+                        labels[z,t] = run_startdist(bj,models,img[z,t])
+
             elif len(dims) == 3:
                 if z_slices:
-                    nz = img.shape[0]
+                    nz, nx, ny = img.shape
+                    labels = np.zeros((nz,nx,ny), dtype=np.uint16)
                     for z in range(nz):
-                        processed_slice = run_startdist(bj,models,img[z])
-                        # Store processed slice
-                        labels[z] = processed_slice
-                    metadata = {'axes': 'ZYX'}                      
+                        labels[z] = run_startdist(bj,models,img[z])
+                        
                 elif time_series:
-                    nt = img.shape[0]
-                    for t in np.ndindex(nt):
-                        processed_slice = run_startdist(bj,models,img[t])
-                        # Store processed slice
-                        labels[t] = processed_slice
-                    metadata = {'axes': 'TYX'}                      
+                    nt, nx, ny = img.shape
+                    labels = np.zeros((nt,nx,ny), dtype=np.uint16)
+                    for t in range(nt):
+                        labels[t] = run_startdist(bj,models,img[t])
+                        
                 elif channels:
-                    labels[nuc_channel] = run_startdist(bj,models,img[nuc_channel])
+                    labels = run_startdist(bj,models,img[nuc_channel])
+
             elif len(dims) == 2:
                 labels = run_startdist(bj,models,img)
-                metadata = {'axes': 'YX'}
-            bj.job.update(progress=90, statusComment="shape of labels: "+ str(labels.shape))
-            imwrite(os.path.join(out_path,os.path.basename(img_path)), labels,ome=True,metadata=metadata,photometric='minisblack')
 
-        # 3. Upload data to BIAFLOWS
+            bj.job.update(progress=90, statusComment=f"Objects detected in image: {np.any(labels>0)}")
+            imwrite(os.path.join(out_path,os.path.basename(img_path)), labels)
+
+        # 3. Upload data
         upload_data(problem_cls, bj, in_imgs, out_path, **bj.flags, monitor_params={
             "start": 60, "end": 90, "period": 0.1,
             "prefix": "Extracting and uploading polygons from masks"})
         
-        # 4. Compute and upload metrics
+        # 4. Compute metrics
         bj.job.update(progress=90, statusComment="Computing and uploading metrics...")
         upload_metrics(problem_cls, bj, in_imgs, gt_path, out_path, tmp_path, **bj.flags)
 
-        # 5. Pipeline finished
+        # 5. Finish
         bj.job.update(progress=100, status=Job.TERMINATED, status_comment="Finished.")
 
 if __name__ == "__main__":
