@@ -17,9 +17,7 @@
 import sys
 import numpy as np
 import os
-import imageio
-from tifffile import imread, imwrite, TiffFile
-import tifffile
+from tifffile import imwrite, TiffFile
 import skimage
 import skimage.color
 from csbdeep.utils import normalize
