@@ -52,6 +52,7 @@ RUN chmod 444 /models/2D_versatile_he/weights_best.h5
 # -----------------------------------------------------------------------------
 # Install scripts
 ADD descriptor.json /app/descriptor.json
+
 RUN mkdir -p /app
 ADD run.py /app/run.py
 
