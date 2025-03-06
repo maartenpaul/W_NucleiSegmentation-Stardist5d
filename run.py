@@ -26,7 +26,7 @@ from stardist.models import StarDist2D
 from cytomine.models import Job
 from biaflows import CLASS_OBJSEG
 from biaflows.helpers import BiaflowsJob, prepare_data, upload_data, upload_metrics
-
+#TODO incorporate the new time_series and z_slices parameters which are now integer or list or when -1 process all
 def convert_to_5d_from_tifffile(volume, axes, target="XYZCT"):
     """
     Convert a numpy array from TiffFile to 5D dimensions suitable for OMERO
@@ -57,10 +57,7 @@ def convert_to_5d_from_tifffile(volume, axes, target="XYZCT"):
     # Validate axes dimensions match array dimensions
     if len(axes) != volume.ndim:
         raise ValueError(f"Axes string '{axes}' does not match array dimensions {volume.ndim}")
-    
-    # Some TIFF files use 'S' for samples/channels, convert to 'C' for consistency
-    axes = axes.replace('S', 'C')
-    
+        
     # Validate target dimensions
     if len(target) != 5:
         raise ValueError(f"Target dimensions must have exactly 5 dimensions, got '{target}'")
