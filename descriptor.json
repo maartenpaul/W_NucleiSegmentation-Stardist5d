@@ -1,145 +1,189 @@
 {
     "name": "NucleiSegmentation-Stardist5D",
-    "description": "Nuclei segmentation using StarDist with versatile nuclei pre-trained model for 5D images",
+    "description": "Nuclei segmentation using StarDist with versatile nuclei pre-trained model for 5D images. It will use 2D stardist to segment nuclei in all z and time slices. For large images, automated tiling is applied.",
     "container-image": {
         "image": "maartenpaul/w_nucleisegmentation-stardist5d",
         "type": "singularity"
     },
     "schema-version": "cytomine-0.1",
-    "command-line": "python run.py CYTOMINE_HOST CYTOMINE_PUBLIC_KEY CYTOMINE_PRIVATE_KEY CYTOMINE_ID_PROJECT CYTOMINE_ID_SOFTWARE STARDIST_PROB_T STARDIST_NMS_T STARDIST_NORM_PERC_LOW STARDIST_NORM_PERC_HIGH NUC_CHANNEL",
+    "command-line": "python run.py CYTOMINE_HOST CYTOMINE_PUBLIC_KEY CYTOMINE_PRIVATE_KEY CYTOMINE_ID_PROJECT CYTOMINE_ID_SOFTWARE STARDIST_PROB_T STARDIST_NMS_T STARDIST_NORM_PERC_LOW STARDIST_NORM_PERC_HIGH NUC_CHANNEL TIME_SERIES Z_SLICES SCALE_FACTOR TILE_SIZE_X TILE_SIZE_Y BLOCK_OVERLAP AUTO_TILING",
     "inputs": [
         {
             "id": "cytomine_host",
-      	    "value-key": "@ID",
-      	    "command-line-flag": "--@id",
-      	    "name": "BIAFLOWS host",
-      	    "set-by-server": true,
-      	    "optional": false,
-      	    "type": "String"
-    	},
+            "value-key": "@ID",
+            "command-line-flag": "--@id",
+            "name": "BIAFLOWS host",
+            "set-by-server": true,
+            "optional": false,
+            "type": "String"
+        },
         {
-	    "id": "cytomine_public_key",
-	    "value-key": "@ID",
-	    "command-line-flag": "--@id",
-	    "name": "BIAFLOWS public key",
-	    "set-by-server": true,
-	    "optional": false,
-	    "type": "String"
-    	},
-    	{
-    	    "id": "cytomine_private_key",
-	    "value-key": "@ID",
-	    "command-line-flag": "--@id",
-	    "name": "BIAFLOWS private key",
-	    "set-by-server": true,
-	    "optional": false,
-	    "type": "String"
-    	},
-	{
-	    "id": "cytomine_id_project",
-	    "value-key": "@ID",
-	    "command-line-flag": "--@id",
-	    "name": "BIAFLOWS project ID",
-	    "set-by-server": true,
-	    "optional": false,
-	    "type": "Number"
-    	},
-	{
-	    "id": "cytomine_id_software",
-	    "value-key": "@ID",
-	    "command-line-flag": "--@id",
-	    "name": "BIAFLOWS software ID",
-	    "set-by-server": true,
-	    "optional": false,
-	    "type": "Number"
-	},
-	{
-	    "id": "stardist_prob_t",
-	    "value-key": "@ID",
-	    "command-line-flag": "--@id",
-	    "name": "Stardist Probability Threshold",
-	    "description": "Probability Threshold in range [0.0, 1.0] - higher values lead to fewer segmented objects, but will likely avoid false positives",
-	    "default-value": 0.5,
-	    "set-by-server": false,
-	    "optional": true,
-	    "type": "Number"
-	},
-	{
-	    "id": "stardist_nms_t",
-	    "value-key": "@ID",
-	    "command-line-flag": "--@id",
-	    "name": "Stardist Non-Maximum Suppression Overlap threshold",
-	    "description": "Overlap Threshold in range [0.0, 1.0] - higher values allow segmented objects to overlap substantially.",
-	    "default-value": 0.5,
-	    "set-by-server": false,
-	    "optional": true,
-	    "type": "Number"
-	},
-	{
-	    "id": "stardist_norm_perc_low",
-	    "value-key": "@ID",
-	    "command-line-flag": "--@id",
-	    "name": "Stardist Image Normalization Percentile Low",
-	    "description": "Percentile low in range [0.0 100.0]",
-	    "default-value": 1,
-	    "set-by-server": false,
-	    "optional": true,
-	    "type": "Number"
-	},
-	{
-	    "id": "stardist_norm_perc_high",
-	    "value-key": "@ID",
-	    "command-line-flag": "--@id",
-	    "name": "Stardist Image Normalization Percentile High",
-	    "description": "Percentile high in range [0.0 100.0]",
-	    "default-value": 99.8,
-	    "set-by-server": false,
-	    "optional": true,
-	    "type": "Number"
-	},
-	{
-		"id": "nuc_channel",
-		"value-key": "@ID",
-		"command-line-flag": "--@id",
-		"name": "Nuclei channel",
-		"description": "Use default 0 for grayscale and RGB that should be converted to grayscale based on luminance. Use 1, 2 or 3 to select a specific RGB channel",
-		"default-value": 0,
-		"set-by-server": false,
-		"optional": true,
-		"type": "Number"
-	},
-	{
-		"id": "channels",
-		"value-key": "@ID",
-		"command-line-flag": "--@id",
-		"name": "Multiple channels",
-		"description": "Are there multiple channels in the image?",
-		"default-value": false,
-		"set-by-server": false,
-		"optional": true,
-		"type": "Boolean"
-	},
-	{
-		"id": "time_series",
-		"value-key": "@ID",
-		"command-line-flag": "--@id",
-		"name": "Process time series",
-		"description": "Are there z-slices in the image?",
-		"default-value": false,
-		"set-by-server": false,
-		"optional": true,
-		"type": "Boolean"
-	},
-	{
-		"id": "z_slices",
-		"value-key": "@ID",
-		"command-line-flag": "--@id",
-		"name": "Process z slices",
-		"description": "Are there z-slices in the image?",
-		"default-value": false,
-		"set-by-server": false,
-		"optional": true,
-		"type": "Boolean"
-	}
+            "id": "cytomine_public_key",
+            "value-key": "@ID",
+            "command-line-flag": "--@id",
+            "name": "BIAFLOWS public key",
+            "set-by-server": true,
+            "optional": false,
+            "type": "String"
+        },
+        {
+            "id": "cytomine_private_key",
+            "value-key": "@ID",
+            "command-line-flag": "--@id",
+            "name": "BIAFLOWS private key",
+            "set-by-server": true,
+            "optional": false,
+            "type": "String"
+        },
+        {
+            "id": "cytomine_id_project",
+            "value-key": "@ID",
+            "command-line-flag": "--@id",
+            "name": "BIAFLOWS project ID",
+            "set-by-server": true,
+            "optional": false,
+            "type": "Number"
+        },
+        {
+            "id": "cytomine_id_software",
+            "value-key": "@ID",
+            "command-line-flag": "--@id",
+            "name": "BIAFLOWS software ID",
+            "set-by-server": true,
+            "optional": false,
+            "type": "Number"
+        },
+        {
+            "id": "stardist_prob_t",
+            "value-key": "@ID",
+            "command-line-flag": "--@id",
+            "name": "Stardist Probability Threshold",
+            "description": "Probability Threshold in range [0.0, 1.0] - higher values lead to fewer segmented objects, but will likely avoid false positives",
+            "default-value": 0.5,
+            "set-by-server": false,
+            "optional": true,
+            "type": "Number"
+        },
+        {
+            "id": "stardist_nms_t",
+            "value-key": "@ID",
+            "command-line-flag": "--@id",
+            "name": "Stardist Non-Maximum Suppression Overlap threshold",
+            "description": "Overlap Threshold in range [0.0, 1.0] - higher values allow segmented objects to overlap substantially.",
+            "default-value": 0.5,
+            "set-by-server": false,
+            "optional": true,
+            "type": "Number"
+        },
+        {
+            "id": "stardist_norm_perc_low",
+            "value-key": "@ID",
+            "command-line-flag": "--@id",
+            "name": "Stardist Image Normalization Percentile Low",
+            "description": "Percentile low in range [0.0 100.0]",
+            "default-value": 1,
+            "set-by-server": false,
+            "optional": true,
+            "type": "Number"
+        },
+        {
+            "id": "stardist_norm_perc_high",
+            "value-key": "@ID",
+            "command-line-flag": "--@id",
+            "name": "Stardist Image Normalization Percentile High",
+            "description": "Percentile high in range [0.0 100.0]",
+            "default-value": 99.8,
+            "set-by-server": false,
+            "optional": true,
+            "type": "Number"
+        },
+        {
+            "id": "nuc_channel",
+            "value-key": "@ID",
+            "command-line-flag": "--@id",
+            "name": "Nuclei channel",
+            "description": "Choose channel to segment (start at 0), -1 to segment all channels",
+            "default-value": 0,
+            "set-by-server": false,
+            "optional": true,
+            "type": "Number"
+        },
+        {
+            "id": "time_series",
+            "value-key": "@ID",
+            "command-line-flag": "--@id",
+            "name": "Process time series",
+            "description": "Process specific time point (start at 0), -1 to process all time points",
+            "default-value": -1,
+            "set-by-server": false,
+            "optional": true,
+            "type": "Number"
+        },
+        {
+            "id": "z_slices",
+            "value-key": "@ID",
+            "command-line-flag": "--@id",
+            "name": "Process z slices",
+            "description": "Process specific z-slice (start at 0), -1 to process all z-slices",
+            "default-value": -1,
+            "set-by-server": false,
+            "optional": true,
+            "type": "Number"
+        },
+        {
+            "id": "scale_factor",
+            "value-key": "@ID",
+            "command-line-flag": "--@id",
+            "name": "Scale factor",
+            "description": "Scale the input image by this factor for processing. Values <1 for large nuclei, >1 for small nuclei, 1.0 for no scaling.",
+            "default-value": 1.0,
+            "set-by-server": false,
+            "optional": true,
+            "type": "Number"
+        },
+        {
+            "id": "tile_size_x",
+            "value-key": "@ID",
+            "command-line-flag": "--@id",
+            "name": "Tile size X",
+            "description": "Size of tiles in X dimension for processing large images. Images larger than this will use block processing.",
+            "default-value": 1024,
+            "set-by-server": false,
+            "optional": true,
+            "type": "Number"
+        },
+        {
+            "id": "tile_size_y",
+            "value-key": "@ID",
+            "command-line-flag": "--@id",
+            "name": "Tile size Y",
+            "description": "Size of tiles in Y dimension for processing large images. Images larger than this will use block processing.",
+            "default-value": 1024,
+            "set-by-server": false,
+            "optional": true,
+            "type": "Number"
+        },
+        {
+            "id": "block_overlap",
+            "value-key": "@ID",
+            "command-line-flag": "--@id",
+            "name": "Block overlap",
+            "description": "Overlap between blocks for large image processing (must be smaller than tile size)",
+            "default-value": 128,
+            "set-by-server": false,
+            "optional": true,
+            "type": "Number"
+        },
+        {
+            "id": "auto_tiling",
+            "value-key": "@ID",
+            "command-line-flag": "--@id",
+            "name": "Auto tiling",
+            "description": "Automatically determine whether to use tiling based on image size",
+            "default-value": true,
+            "set-by-server": false,
+            "optional": true,
+            "type": "Boolean"
+        }
     ]
 }

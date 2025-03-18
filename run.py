@@ -21,12 +21,13 @@ from tifffile import imwrite, TiffFile
 import skimage
 import skimage.color
 from csbdeep.utils import normalize
+from csbdeep.data import Normalizer, normalize_mi_ma
 from stardist import random_label_cmap
 from stardist.models import StarDist2D
 from cytomine.models import Job
 from biaflows import CLASS_OBJSEG
 from biaflows.helpers import BiaflowsJob, prepare_data, upload_data, upload_metrics
-#TODO incorporate the new time_series and z_slices parameters which are now integer or list or when -1 process all
+
 def convert_to_5d_from_tifffile(volume, axes, target="XYZCT"):
     """
     Convert a numpy array from TiffFile to 5D dimensions suitable for OMERO
@@ -57,6 +58,9 @@ def convert_to_5d_from_tifffile(volume, axes, target="XYZCT"):
     # Validate axes dimensions match array dimensions
     if len(axes) != volume.ndim:
         raise ValueError(f"Axes string '{axes}' does not match array dimensions {volume.ndim}")
+    
+    # Some TIFF files use 'S' for samples/channels, convert to 'C' for consistency
+    axes = axes.replace('S', 'C')
         
     # Validate target dimensions
     if len(target) != 5:
@@ -100,18 +104,92 @@ def convert_to_5d_from_tifffile(volume, axes, target="XYZCT"):
     
     return ReturnValue(img_5d, target)
 
-def run_stardist_on_slice(img_slice, models, bj):
+def should_use_big_model(img_shape, params):
     """
-    Run StarDist on a 2D image slice
+    Determine whether to use predict_instances_big based on image size and parameters
+    
+    Args:
+        img_shape: Shape of the 2D image slice (Y, X)
+        params: Parameters object with tile_size_x, tile_size_y, and auto_tiling attributes
+        
+    Returns:
+        Boolean indicating whether to use predict_instances_big
+    """
+    # If auto_tiling is disabled, use the explicit big_image parameter
+    if not params.auto_tiling:
+        return params.big_image
+    
+    # Get image dimensions
+    height, width = img_shape
+    
+    # Check if image is larger than specified tile sizes
+    return height > params.tile_size_y or width > params.tile_size_x
+
+def calculate_n_tiles(img_shape, tile_size_y, tile_size_x):
+    """
+    Calculate appropriate n_tiles parameter based on image dimensions and tile sizes
+    
+    Args:
+        img_shape: Shape of the 2D image slice (Y, X)
+        tile_size_y: Tile size in Y dimension
+        tile_size_x: Tile size in X dimension
+        
+    Returns:
+        Tuple (n_tiles_y, n_tiles_x) for StarDist predict_instances
+    """
+    # Get image dimensions
+    height, width = img_shape
+    
+    # Calculate number of tiles needed in each dimension
+    n_tiles_y = max(1, int(np.ceil(height / tile_size_y)))
+    n_tiles_x = max(1, int(np.ceil(width / tile_size_x)))
+    
+    return (n_tiles_y, n_tiles_x)
+
+def create_normalizer(img_slice, params):
+    """
+    Create a custom normalizer for StarDist
+    
+    Args:
+        img_slice: 2D image slice
+        params: Parameters with normalization settings
+        
+    Returns:
+        Normalizer object for StarDist prediction functions
+    """
+    class MyNormalizer(Normalizer):
+        def __init__(self, mi, ma):
+            self.mi, self.ma = mi, ma
+            
+        def before(self, x, axes):
+            return normalize_mi_ma(x, self.mi, self.ma, dtype=np.float32)
+            
+        def after(*args, **kwargs):
+            assert False
+            
+        @property
+        def do_after(self):
+            return False
+    
+    # Calculate percentiles for normalization
+    mi, ma = np.percentile(img_slice, [params.stardist_norm_perc_low, 
+                                      params.stardist_norm_perc_high])
+    
+    return MyNormalizer(mi, ma)
+
+def run_stardist_on_slice(img_slice, models, params):
+    """
+    Run StarDist on a 2D image slice with automatic handling of image size and scaling
     
     Args:
         img_slice: 2D image slice
         models: StarDist models (fluo and HE)
-        bj: BiaFlows job object
+        params: Parameters object with StarDist settings
         
     Returns:
         Segmentation mask for the slice
     """
+    # Determine if fluorescence or H&E model should be used
     fluo = True
     n_channel = 3 if img_slice.ndim == 3 else 1
     
@@ -122,35 +200,72 @@ def run_stardist_on_slice(img_slice, models, bj):
         else:
             fluo = False
     
-    # Normalize image
-    axis_norm = (0,1)
-    img_slice = normalize(img_slice, 
-                         bj.parameters.stardist_norm_perc_low, 
-                         bj.parameters.stardist_norm_perc_high,
-                         axis=axis_norm)
+    # Select the appropriate model
+    model = models[0] if fluo else models[1]
     
-    # Run appropriate model
-    if fluo:
-        labels, _ = models[0].predict_instances(img_slice,
-                                              prob_thresh=bj.parameters.stardist_prob_t,
-                                              nms_thresh=bj.parameters.stardist_nms_t)
+    # Determine if we should use predict_instances_big based on image size
+    use_big = should_use_big_model(img_slice.shape, params)
+    
+    # Get scale factor
+    scale = params.scale_factor
+    
+    if use_big:
+        # Create normalizer for large images
+        normalizer = create_normalizer(img_slice, params)
+        
+        # Set up block processing parameters
+        block_size = (params.tile_size_y, params.tile_size_x)
+        
+        # Ensure block_overlap is not too large compared to block_size
+        min_block_dimension = min(block_size)
+        block_overlap = min(params.block_overlap, min_block_dimension // 4)
+        
+        # Use same value for context as overlap by default
+        context = block_overlap
+        
+        # Process with predict_instances_big
+        labels, polys = model.predict_instances_big(
+            img_slice, 
+            axes='YX', 
+            block_size=block_size, 
+            min_overlap=block_overlap, 
+            context=context,
+            normalizer=normalizer,
+            scale=scale,
+            prob_thresh=params.stardist_prob_t,
+            nms_thresh=params.stardist_nms_t
+        )
     else:
-        labels, _ = models[1].predict_instances(img_slice,
-                                              prob_thresh=bj.parameters.stardist_prob_t,
-                                              nms_thresh=bj.parameters.stardist_nms_t)
+        # Calculate n_tiles for regular processing
+        n_tiles = calculate_n_tiles(img_slice.shape, params.tile_size_y, params.tile_size_x)
+        
+        # Normalize image directly for smaller images
+        img_slice_norm = normalize(img_slice, 
+                            params.stardist_norm_perc_low, 
+                            params.stardist_norm_perc_high,
+                            axis=(0,1))
+        
+        # Process with standard predict_instances
+        labels, polys = model.predict_instances(
+            img_slice_norm,
+            prob_thresh=params.stardist_prob_t,
+            nms_thresh=params.stardist_nms_t,
+            n_tiles=n_tiles,
+            scale=scale
+        )
     
     return labels.astype(np.uint16)
 
-def process_image(img_path, models, bj, nuc_channel=0):
+def process_image(img_path, models, bj, params):
     """
     Process image using convert_to_5d_from_tifffile to standardize dimensions.
     Converts input to TZCYX format and maintains this format for output.
     
     Args:
         img_path: Path to the input image
-        models: StarDist models
+        models: StarDist models (fluo and HE)
         bj: BiaFlows job object
-        nuc_channel: Index or list of indices for channels to process
+        params: Parameter object with processing settings
         
     Returns:
         tuple: (segmentation_labels, axes_string)
@@ -188,50 +303,89 @@ def process_image(img_path, models, bj, nuc_channel=0):
         bj.job.update(status=Job.RUNNING, progress=40,
                      statusComment=f"Dimensions (TZCYX): {dims}")
         
-        # Validate and normalize channel input
+        # Get channel, time, and z-slice parameters
+        nuc_channel = params.nuc_channel
+        time_point = params.time_series
+        z_slice = params.z_slices
+        
+        # Prepare channel list to process
         if isinstance(nuc_channel, (int, np.integer)):
-            channels_to_process = [nuc_channel]
+            if nuc_channel == -1:
+                # Process all channels
+                channels_to_process = list(range(dims['C']))
+            else:
+                channels_to_process = [nuc_channel]
         elif isinstance(nuc_channel, (list, tuple, np.ndarray)):
             channels_to_process = list(nuc_channel)
         else:
             raise ValueError(f"Invalid nuc_channel type: {type(nuc_channel)}. Must be int or list of ints.")
         
-        # Validate channel indices
-        invalid_channels = [c for c in channels_to_process if c >= dims['C']]
-        if invalid_channels:
-            raise ValueError(
-                f"Invalid channel indices {invalid_channels}. Image has {dims['C']} channels (0-{dims['C']-1})"
-            )
+        # Prepare time points to process
+        if isinstance(time_point, (int, np.integer)):
+            if time_point == -1:
+                # Process all time points
+                time_points_to_process = list(range(dims['T']))
+            else:
+                time_points_to_process = [time_point]
+        elif isinstance(time_point, (list, tuple, np.ndarray)):
+            time_points_to_process = list(time_point)
+        else:
+            raise ValueError(f"Invalid time_point type: {type(time_point)}. Must be int or list of ints.")
         
-        # Create output array - same dimensions except for C which matches processed channels
+        # Prepare z-slices to process
+        if isinstance(z_slice, (int, np.integer)):
+            if z_slice == -1:
+                # Process all z-slices
+                z_slices_to_process = list(range(dims['Z']))
+            else:
+                z_slices_to_process = [z_slice]
+        elif isinstance(z_slice, (list, tuple, np.ndarray)):
+            z_slices_to_process = list(z_slice)
+        else:
+            raise ValueError(f"Invalid z_slice type: {type(z_slice)}. Must be int or list of ints.")
+        
+        # Validate indices
+        for channel in channels_to_process:
+            if channel >= dims['C']:
+                raise ValueError(f"Invalid channel index {channel}. Image has {dims['C']} channels (0-{dims['C']-1})")
+        
+        for t in time_points_to_process:
+            if t >= dims['T']:
+                raise ValueError(f"Invalid time point {t}. Image has {dims['T']} time points (0-{dims['T']-1})")
+        
+        for z in z_slices_to_process:
+            if z >= dims['Z']:
+                raise ValueError(f"Invalid z-slice {z}. Image has {dims['Z']} z-slices (0-{dims['Z']-1})")
+        
+        # Create output array - shape matches the selected dimensions
         output_shape = (
-            dims['T'],          # Time
-            dims['Z'],          # Depth
-            len(channels_to_process),  # Only processed channels
-            dims['Y'],          # Height
-            dims['X']           # Width
+            len(time_points_to_process),
+            len(z_slices_to_process),
+            len(channels_to_process),
+            dims['Y'],
+            dims['X']
         )
         output = np.zeros(output_shape, dtype=np.uint16)
         
         # Calculate total slices for progress tracking
-        total_slices = len(channels_to_process) * dims['Z'] * dims['T']
+        total_slices = len(channels_to_process) * len(z_slices_to_process) * len(time_points_to_process)
         current_slice = 0
         
-        # Process each requested channel
+        # Process selected dimensions
         for ch_idx, channel in enumerate(channels_to_process):
             bj.job.update(status=Job.RUNNING,
                          statusComment=f"Processing channel {channel} ({ch_idx+1}/{len(channels_to_process)})")
             
-            for t in range(dims['T']):
-                for z in range(dims['Z']):
+            for t_idx, t in enumerate(time_points_to_process):
+                for z_idx, z in enumerate(z_slices_to_process):
                     # Extract YX slice from current TZC position
                     img_slice = img_5d[t, z, channel, :, :]  # Note TZCYX order
                     
-                    # Process the slice
-                    labels = run_stardist_on_slice(img_slice, models, bj)
+                    # Process the slice with new function
+                    labels = run_stardist_on_slice(img_slice, models, params)
                     
                     # Store results in corresponding position
-                    output[t, z, ch_idx, :, :] = labels
+                    output[t_idx, z_idx, ch_idx, :, :] = labels
                     
                     # Update progress
                     current_slice += 1
@@ -239,11 +393,18 @@ def process_image(img_path, models, bj, nuc_channel=0):
                     bj.job.update(status=Job.RUNNING, progress=int(progress),
                                 statusComment=f"Processed channel {channel}, T {t+1}/{dims['T']}, Z {z+1}/{dims['Z']}")
         
-        # Keep TZCYX format for output
-        bj.job.update(status=Job.RUNNING, progress=90,
-                     statusComment=f"Maintaining TZCYX format (original was: {original_axes})")
+        # Add dimension mapping information to output metadata
+        dimension_mapping = {
+            'T': time_points_to_process,
+            'Z': z_slices_to_process,
+            'C': channels_to_process
+        }
         
-        return output, "TZCYX"
+        # Keep TZCYX format for output, but with metadata about which slices were processed
+        bj.job.update(status=Job.RUNNING, progress=90,
+                     statusComment=f"Maintaining TZCYX format with processed dimensions: {dimension_mapping}")
+        
+        return output, "TZCYX", dimension_mapping
 
 def main(argv):
     base_path = "{}".format(os.getenv("HOME"))
@@ -251,28 +412,10 @@ def main(argv):
 
     with BiaflowsJob.from_cli(argv) as bj:
         bj.job.update(status=Job.RUNNING, progress=0, statusComment="Initialization...")
-
+        
         # 1. Prepare data for workflow
         in_imgs, gt_imgs, in_path, gt_path, out_path, tmp_path = prepare_data(problem_cls, bj, is_2d=False, **bj.flags)
         list_imgs = [image.filepath for image in in_imgs]
-
-        # Parse nuclear channel parameter
-        nuc_channel = bj.parameters.nuc_channel
-        if isinstance(nuc_channel, str):
-            if ',' in nuc_channel:  # Multiple channels specified
-                try:
-                    nuc_channel = [int(c.strip()) for c in nuc_channel.split(',')]
-                    bj.job.update(status=Job.RUNNING, progress=10,
-                                statusComment=f"Processing multiple channels: {nuc_channel}")
-                except ValueError:
-                    raise ValueError(f"Invalid channel specification: {nuc_channel}. Must be an integer or comma-separated integers.")
-            else:  # Single channel specified
-                try:
-                    nuc_channel = int(nuc_channel)
-                    bj.job.update(status=Job.RUNNING, progress=10,
-                                statusComment=f"Processing channel: {nuc_channel}")
-                except ValueError:
-                    raise ValueError(f"Invalid channel specification: {nuc_channel}. Must be an integer or comma-separated integers.")
         
         # 2. Initialize StarDist models
         bj.job.update(progress=15, statusComment="Loading StarDist models...")
@@ -289,14 +432,23 @@ def main(argv):
                         statusComment=f"Processing image {img_index+1}/{len(list_imgs)}: {img_name}")
             
             try:
-                # Process image using our new function
-                labels, axes = process_image(img_path, models, bj, nuc_channel)
+                # Process image using our updated function
+                labels, axes, dimension_mapping = process_image(img_path, models, bj, bj.parameters)
                 
                 # Create output path
                 output_path = os.path.join(out_path, img_name)
                 
                 # Save in TZCYX format
-                metadata = {'axes': 'TZCYX'}  # Always use TZCYX format
+                metadata = {
+                    'axes': axes,
+                    'dimension_mapping': str(dimension_mapping),
+                    'stardist_params': {
+                        'prob_threshold': bj.parameters.stardist_prob_t,
+                        'nms_threshold': bj.parameters.stardist_nms_t,
+                        'scale_factor': bj.parameters.scale_factor
+                    }
+                }
+                
                 imwrite(output_path, labels,
                        metadata=metadata,
                        photometric='minisblack',
