@@ -81,7 +81,7 @@
             "command-line-flag": "--@id",
             "name": "Stardist Image Normalization Percentile Low",
             "description": "Percentile low in range [0.0 100.0]",
-            "default-value": 1,
+            "default-value": 1.0,
             "set-by-server": false,
             "optional": true,
             "type": "Number"
@@ -136,7 +136,7 @@
             "command-line-flag": "--@id",
             "name": "Scale factor",
             "description": "Scale the input image by this factor for processing. Values <1 for large nuclei, >1 for small nuclei, 1.0 for no scaling.",
-            "default-value": 1,
+            "default-value": 1.0,
             "set-by-server": false,
             "optional": true,
             "type": "Number"
