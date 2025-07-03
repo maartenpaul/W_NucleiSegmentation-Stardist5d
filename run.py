@@ -117,7 +117,7 @@ def should_use_big_model(img_shape, params):
     """
     # If auto_tiling is disabled, use the explicit big_image parameter
     if not params.auto_tiling:
-        return params.big_image
+        return False
     
     # Get image dimensions
     height, width = img_shape
@@ -424,6 +424,10 @@ def main(argv):
         model_he = StarDist2D(None, name='2D_versatile_he', basedir='/models/')
         models = [model_fluo, model_he]
         
+        # Track processing results
+        failed_images = []
+        successful_images = []
+        
         # Process each image
         bj.job.update(progress=20, statusComment=f"Number of images: {len(list_imgs)}")
         for img_index, img_path in enumerate(list_imgs):
@@ -459,27 +463,51 @@ def main(argv):
                 num_objects = len(np.unique(labels)) - 1  # Subtract 1 for background
                 bj.job.update(progress=int(75 + (15 * (img_index + 1) / len(list_imgs))),
                             statusComment=f"Completed {img_name}: {num_objects} objects detected")
+                
+                successful_images.append(img_name)
             
             except Exception as e:
                 error_msg = f"Error processing {img_name}: {str(e)}"
                 bj.job.update(progress=75, statusComment=error_msg)
                 import traceback
                 traceback.print_exc()
+                failed_images.append((img_name, str(e)))
                 # Continue with next image
-                continue
 
-        # 3. Upload data
-        bj.job.update(progress=90, statusComment="Uploading results...")
-        upload_data(problem_cls, bj, in_imgs, out_path, **bj.flags, monitor_params={
-            "start": 90, "end": 95, "period": 0.1,
-            "prefix": "Extracting and uploading polygons from masks"})
-        
-        # 4. Compute metrics
-        bj.job.update(progress=95, statusComment="Computing and uploading metrics...")
-        upload_metrics(problem_cls, bj, in_imgs, gt_path, out_path, tmp_path, **bj.flags)
+        # Check if any images failed
+        if failed_images:
+            error_summary = f"Failed to process {len(failed_images)} out of {len(list_imgs)} images: {[name for name, _ in failed_images]}"
+            bj.job.update(progress=75, statusComment=error_summary)
+            
+            # If all images failed, terminate with error
+            if len(failed_images) == len(list_imgs):
+                bj.job.update(progress=100, status=Job.FAILED, 
+                            statusComment=f"All {len(list_imgs)} images failed to process")
+                sys.exit(1)  # Exit with error code
+            
+            # If some images succeeded, continue with upload but note the failures
+            bj.job.update(progress=80, 
+                        statusComment=f"Proceeding with {len(successful_images)} successful images, {len(failed_images)} failed")
 
-        # 5. Finish
-        bj.job.update(progress=100, status=Job.TERMINATED, status_comment="Finished.")
+        # 3. Upload data (only if we have successful images)
+        if successful_images:
+            bj.job.update(progress=90, statusComment="Uploading results...")
+            upload_data(problem_cls, bj, in_imgs, out_path, **bj.flags, monitor_params={
+                "start": 90, "end": 95, "period": 0.1,
+                "prefix": "Extracting and uploading polygons from masks"})
+            
+            # 4. Compute metrics
+            bj.job.update(progress=95, statusComment="Computing and uploading metrics...")
+            upload_metrics(problem_cls, bj, in_imgs, gt_path, out_path, tmp_path, **bj.flags)
 
+        # 5. Finish with appropriate status
+        if failed_images:
+            final_status = f"Completed with errors: {len(successful_images)} successful, {len(failed_images)} failed"
+            bj.job.update(progress=100, status=Job.TERMINATED, statusComment=final_status)
+            # Exit with error code to indicate partial failure
+            sys.exit(1)
+        else:
+            bj.job.update(progress=100, status=Job.TERMINATED, statusComment="Finished successfully.")
+            
 if __name__ == "__main__":
     main(sys.argv[1:])
